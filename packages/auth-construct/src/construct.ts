@@ -11,7 +11,6 @@ import {
   ResourceProvider,
 } from '@aws-amplify/plugin-types';
 import {
-  CfnIdentityPool,
   CfnUserPool,
   CfnUserPoolClient,
   CfnUserPoolGroup,
@@ -131,7 +130,7 @@ export class AmplifyAuth
   private readonly groups: {
     [key: string]: {
       cfnUserGroup: CfnUserPoolGroup;
-      role: Role;
+      role?: Role;
     };
   } = {};
   /**
@@ -225,7 +224,7 @@ export class AmplifyAuth
     );
 
     // Setup UserPool groups
-    this.setupUserPoolGroups(props.groups, identityPool);
+    this.setupUserPoolGroups(props.groups);
 
     const cfnUserPool = this.userPool.node.findChild('Resource') as CfnUserPool;
     if (!(cfnUserPool instanceof CfnUserPool)) {
@@ -300,40 +299,26 @@ export class AmplifyAuth
   };
 
   /**
-   * Auto generate the user pool groups and group roles
+   * Auto generate the user pool groups without individual roles
+   * Groups will use the base authenticated role with conditional access based on group membership
    */
-  private setupUserPoolGroups = (
-    groups: string[] | undefined,
-    identityPool: CfnIdentityPool,
-  ) => {
+  private setupUserPoolGroups = (groups: string[] | undefined) => {
     (groups || []).forEach((groupName, index) => {
-      const groupRole = new Role(this, `${this.name}${groupName}GroupRole`, {
-        assumedBy: new FederatedPrincipal(
-          'cognito-identity.amazonaws.com',
-          {
-            StringEquals: {
-              'cognito-identity.amazonaws.com:aud': identityPool.ref,
-            },
-            'ForAnyValue:StringLike': {
-              'cognito-identity.amazonaws.com:amr': 'authenticated',
-            },
-          },
-          'sts:AssumeRoleWithWebIdentity',
-        ),
-      });
+      // Create the user pool group without a dedicated role
+      // This allows the group to use the base authenticated role with conditional statements
       const currentGroup = new CfnUserPoolGroup(
         this,
         `${this.name}${groupName}Group`,
         {
           userPoolId: this.userPool.userPoolId,
           groupName: groupName,
-          roleArn: groupRole.roleArn,
+          // No roleArn assigned - group will use base authenticated role
           precedence: index,
         },
       );
       this.groups[groupName] = {
         cfnUserGroup: currentGroup,
-        role: groupRole,
+        // No role property - conditional access will be handled in the base authenticated role
       };
     });
   };

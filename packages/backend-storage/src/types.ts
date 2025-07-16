@@ -71,7 +71,7 @@ export type StorageAccessBuilder = {
    * @see https://docs.amplify.aws/gen2/build-a-backend/storage/#owner-based-access
    * @param entityId Defines the identifier that is used to identify owners. Currently only "identity" is supported.
    */
-  entity: (entityId: EntityId) => StorageActionBuilder;
+  entity: (entityId: EntityId) => EntityActionBuilder;
   /**
    * Grant other resources in the Amplify backend access to storage.
    * @see https://docs.amplify.aws/gen2/build-a-backend/storage/#grant-function-access
@@ -87,22 +87,29 @@ export type StorageAccessBuilder = {
 };
 
 /**
- * Builder for configuring group storage access with additional options
+ * Builder for configuring group storage access
+ * Groups get wildcard access to all files in the path, ignoring entity boundaries.
  * @public
  */
-export type GroupsBuilder = {
+export type GroupsBuilder = StorageActionBuilder;
+
+/**
+ * Builder for configuring entity-based storage access with optional group restrictions
+ * @public
+ */
+export type EntityActionBuilder = {
   /**
-   * Configure groups to respect entity boundaries when accessing paths with {entity_id} tokens.
-   * When this is used, groups will only have access to files within their own entity scope,
-   * rather than having wildcard access to all files in the path.
+   * Restrict entity access to users who are members of the specified groups.
+   * When this is used, only users who are both the entity owner AND in one of the specified groups
+   * will have access to their files.
    * @example
-   * // Regular group access - gets wildcard access to all files
-   * allow.groups(['Admins']).to(['read', 'write'])
+   * // Entity access - any authenticated user can access their own files
+   * allow.entity('identity').to(['read', 'write'])
    *
-   * // Entity-respecting group access - only access their own files
-   * allow.groups(['Admins']).respectingEntity().to(['read', 'write'])
+   * // Group-restricted entity access - only users in specified groups can access their own files
+   * allow.entity('identity').inGroups(['Admins', 'Moderators']).to(['read', 'write'])
    */
-  respectingEntity: () => StorageActionBuilder;
+  inGroups: (groupNames: string[]) => StorageActionBuilder;
 } & StorageActionBuilder;
 
 export type StorageActionBuilder = {
@@ -141,6 +148,10 @@ export type StorageAccessDefinition = {
    * The value that will be substituted into the resource string in place of the {owner} token
    */
   idSubstitution: string;
+  /**
+   * Optional group conditions for conditional access based on Cognito group membership
+   */
+  groupConditions?: string[];
   /**
    * Evaluation of the access definition will ensure that all uniqueDefinitionIds occur at most once for a given access path.
    * This can be used to validate against definitions like

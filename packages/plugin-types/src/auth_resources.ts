@@ -69,9 +69,9 @@ export type AuthResources = {
        */
       cfnUserGroup: CfnUserPoolGroup;
       /**
-       * The generated Role for this group
+       * The generated Role for this group (optional - when not provided, group uses base authenticated role with conditional access)
        */
-      role: IRole;
+      role?: IRole;
     };
   };
 };

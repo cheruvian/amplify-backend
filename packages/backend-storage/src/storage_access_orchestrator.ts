@@ -42,7 +42,11 @@ export class StorageAccessOrchestrator {
       acceptor: ResourceAccessAcceptor;
       accessMap: Map<
         InternalStorageAction,
-        { allow: Set<StoragePath>; deny: Set<StoragePath> }
+        {
+          allow: Set<StoragePath>;
+          deny: Set<StoragePath>;
+          groupConditions?: string[];
+        }
       >;
     }
   >();
@@ -145,6 +149,7 @@ export class StorageAccessOrchestrator {
                 getResourceAccessAcceptor(this.getInstanceProps),
                 noDuplicateActions,
                 prefix,
+                permission.groupConditions,
               );
             },
           );
@@ -166,6 +171,7 @@ export class StorageAccessOrchestrator {
     resourceAccessAcceptor: ResourceAccessAcceptor,
     actions: InternalStorageAction[],
     s3Prefix: StoragePath,
+    groupConditions?: string[],
   ) => {
     const acceptorToken = resourceAccessAcceptor.identifier;
 
@@ -183,7 +189,11 @@ export class StorageAccessOrchestrator {
         // if we haven't seen this action for this acceptorToken before, add it to the map
         const allowSet = new Set<StoragePath>([s3Prefix]);
         const denySet = new Set<StoragePath>();
-        accessMap.set(action, { allow: allowSet, deny: denySet });
+        accessMap.set(action, {
+          allow: allowSet,
+          deny: denySet,
+          groupConditions,
+        });
 
         // this is where we create the reverse mapping that allows us to add entries to the denySet later by looking up the prefix
         this.setPrefixDenyMapEntry(s3Prefix, allowSet, denySet);

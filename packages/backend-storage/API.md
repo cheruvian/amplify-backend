@@ -38,14 +38,22 @@ export type AmplifyStorageTriggerEvent = 'onDelete' | 'onUpload';
 export const defineStorage: (props: AmplifyStorageFactoryProps) => ConstructFactory<ResourceProvider<StorageResources> & StackProvider>;
 
 // @public
+export type EntityActionBuilder = {
+    inGroups: (groupNames: string[]) => StorageActionBuilder;
+} & StorageActionBuilder;
+
+// @public
 export type EntityId = 'identity';
+
+// @public
+export type GroupsBuilder = StorageActionBuilder;
 
 // @public
 export type StorageAccessBuilder = {
     authenticated: StorageActionBuilder;
     guest: StorageActionBuilder;
-    groups: (groupNames: string[]) => StorageActionBuilder;
-    entity: (entityId: EntityId) => StorageActionBuilder;
+    groups: (groupNames: string[]) => GroupsBuilder;
+    entity: (entityId: EntityId) => EntityActionBuilder;
     resource: (other: ConstructFactory<ResourceProvider & ResourceAccessAcceptorFactory>) => StorageActionBuilder;
 };
 
@@ -54,6 +62,7 @@ export type StorageAccessDefinition = {
     getResourceAccessAcceptors: ((getInstanceProps: ConstructFactoryGetInstanceProps) => ResourceAccessAcceptor)[];
     actions: StorageAction[];
     idSubstitution: string;
+    groupConditions?: string[];
     uniqueDefinitionIdValidations: {
         uniqueDefinitionId: string;
         validationErrorOptions: AmplifyUserErrorOptions;

@@ -29,7 +29,11 @@ export class StorageAccessPolicyFactory {
   createPolicy = (
     permissions: Map<
       InternalStorageAction,
-      { allow: Set<StoragePath>; deny: Set<StoragePath> }
+      {
+        allow: Set<StoragePath>;
+        deny: Set<StoragePath>;
+        groupConditions?: string[];
+      }
     >,
   ) => {
     if (permissions.size === 0) {
@@ -41,14 +45,29 @@ export class StorageAccessPolicyFactory {
     const statements: PolicyStatement[] = [];
 
     permissions.forEach(
-      ({ allow: allowPrefixes, deny: denyPrefixes }, action) => {
+      (
+        { allow: allowPrefixes, deny: denyPrefixes, groupConditions },
+        action,
+      ) => {
         if (allowPrefixes.size > 0) {
           statements.push(
-            this.getStatement(allowPrefixes, action, Effect.ALLOW),
+            this.getStatement(
+              allowPrefixes,
+              action,
+              Effect.ALLOW,
+              groupConditions,
+            ),
           );
         }
         if (denyPrefixes.size > 0) {
-          statements.push(this.getStatement(denyPrefixes, action, Effect.DENY));
+          statements.push(
+            this.getStatement(
+              denyPrefixes,
+              action,
+              Effect.DENY,
+              groupConditions,
+            ),
+          );
         }
       },
     );
@@ -73,7 +92,15 @@ export class StorageAccessPolicyFactory {
     s3Prefixes: Readonly<Set<StoragePath>>,
     action: InternalStorageAction,
     effect: Effect,
+    groupConditions?: string[],
   ) => {
+    const baseConditions: Record<string, Record<string, string[]>> = {};
+    if (groupConditions && groupConditions.length > 0) {
+      baseConditions['ForAnyValue:StringEquals'] = {
+        'cognito:groups': groupConditions,
+      };
+    }
+
     switch (action) {
       case 'delete':
       case 'get':
@@ -84,18 +111,23 @@ export class StorageAccessPolicyFactory {
           resources: Array.from(s3Prefixes).map(
             (s3Prefix) => `${this.bucket.bucketArn}/${s3Prefix}`,
           ),
+          conditions:
+            Object.keys(baseConditions).length > 0 ? baseConditions : undefined,
         });
-      case 'list':
+      case 'list': {
+        const listConditions = {
+          StringLike: {
+            's3:prefix': Array.from(s3Prefixes).flatMap(toConditionPrefix),
+          },
+          ...baseConditions,
+        };
         return new PolicyStatement({
           effect,
           actions: actionMap[action],
           resources: [this.bucket.bucketArn],
-          conditions: {
-            StringLike: {
-              's3:prefix': Array.from(s3Prefixes).flatMap(toConditionPrefix),
-            },
-          },
+          conditions: listConditions,
         });
+      }
     }
   };
 }

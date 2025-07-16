@@ -773,10 +773,10 @@ void describe('StorageAccessOrchestrator', () => {
       });
     });
 
-    void it('groups should get entity-specific access when entity_id is in the path', () => {
+    void it('entity access with group restrictions should generate conditional policy', () => {
       const acceptResourceAccessMock = mock.fn();
-      const groupResourceAccessAcceptor = () => ({
-        identifier: 'groupResourceAccessAcceptor',
+      const authResourceAccessAcceptor = () => ({
+        identifier: 'authResourceAccessAcceptor',
         acceptResourceAccess: acceptResourceAccessMock,
       });
 
@@ -785,15 +785,17 @@ void describe('StorageAccessOrchestrator', () => {
           [`profile-pictures/${entityIdPathToken}/*`]: [
             {
               actions: ['read', 'write', 'delete'],
-              getResourceAccessAcceptors: [groupResourceAccessAcceptor],
-              idSubstitution: entityIdSubstitution, // This is now set by respectingEntity()
+              getResourceAccessAcceptors: [authResourceAccessAcceptor],
+              idSubstitution: entityIdSubstitution, // Entity access respects identity
+              groupConditions: ['Admins', 'Moderators'], // New field for group conditions
               uniqueDefinitionIdValidations: [
                 {
-                  uniqueDefinitionId: 'groupWithEntityId',
+                  uniqueDefinitionId: 'entityIdentityInGroupsAdminsModerators',
                   validationErrorOptions: {
                     message:
-                      'test duplicate id message for groupWithEntityId identifier',
-                    resolution: 'test resolution for groupWithEntityId',
+                      'Entity access definition for identity in groups [Admins, Moderators] specified multiple times.',
+                    resolution:
+                      'Combine all access definitions for identity in these groups on a single path into one access rule.',
                   },
                 },
               ],
@@ -808,6 +810,8 @@ void describe('StorageAccessOrchestrator', () => {
       const storageAccessDefinitionOutput =
         storageAccessOrchestrator.orchestrateStorageAccess();
       assert.equal(acceptResourceAccessMock.mock.callCount(), 1);
+
+      // The policy should include conditional statements based on group membership
       assert.deepStrictEqual(
         acceptResourceAccessMock.mock.calls[0].arguments[0].document.toJSON(),
         {
@@ -816,6 +820,11 @@ void describe('StorageAccessOrchestrator', () => {
               Action: 's3:GetObject',
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins', 'Moderators'],
+                },
+              },
             },
             {
               Action: 's3:ListBucket',
@@ -828,17 +837,30 @@ void describe('StorageAccessOrchestrator', () => {
                     `profile-pictures/${entityIdSubstitution}/`,
                   ],
                 },
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins', 'Moderators'],
+                },
               },
             },
             {
               Action: 's3:PutObject',
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins', 'Moderators'],
+                },
+              },
             },
             {
               Action: 's3:DeleteObject',
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins', 'Moderators'],
+                },
+              },
             },
           ],
           Version: '2012-10-17',
@@ -850,7 +872,113 @@ void describe('StorageAccessOrchestrator', () => {
       );
       assert.deepStrictEqual(storageAccessDefinitionOutput, {
         [`profile-pictures/${entityIdSubstitution}/*`]: {
-          groupWithEntityId: ['get', 'list', 'write', 'delete'],
+          entityIdentityInGroupsAdminsModerators: [
+            'get',
+            'list',
+            'write',
+            'delete',
+          ],
+        },
+      });
+    });
+
+    void it('groups should get wildcard access with conditional group policy', () => {
+      const acceptResourceAccessMock = mock.fn();
+      const authResourceAccessAcceptor = () => ({
+        identifier: 'authResourceAccessAcceptor',
+        acceptResourceAccess: acceptResourceAccessMock,
+      });
+
+      const storageAccessOrchestrator = new StorageAccessOrchestrator(
+        () => ({
+          [`profile-pictures/${entityIdPathToken}/*`]: [
+            {
+              actions: ['read', 'write', 'delete'],
+              getResourceAccessAcceptors: [authResourceAccessAcceptor],
+              idSubstitution: '*', // Groups get wildcard access
+              groupConditions: ['Admins'], // Group conditions for wildcard access
+              uniqueDefinitionIdValidations: [
+                {
+                  uniqueDefinitionId: 'groupsAdmins',
+                  validationErrorOptions: {
+                    message:
+                      'Group access definition for groups [Admins] specified multiple times.',
+                    resolution:
+                      'Combine all access definitions for these groups on a single path into one access rule.',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+        {} as unknown as ConstructFactoryGetInstanceProps,
+        ssmEnvironmentEntriesStub,
+        storageAccessPolicyFactory,
+      );
+
+      const storageAccessDefinitionOutput =
+        storageAccessOrchestrator.orchestrateStorageAccess();
+      assert.equal(acceptResourceAccessMock.mock.callCount(), 1);
+
+      // The policy should include conditional statements for wildcard access
+      assert.deepStrictEqual(
+        acceptResourceAccessMock.mock.calls[0].arguments[0].document.toJSON(),
+        {
+          Statement: [
+            {
+              Action: 's3:GetObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins'],
+                },
+              },
+            },
+            {
+              Action: 's3:ListBucket',
+              Effect: 'Allow',
+              Resource: bucket.bucketArn,
+              Condition: {
+                StringLike: {
+                  's3:prefix': ['profile-pictures/*', 'profile-pictures/'],
+                },
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins'],
+                },
+              },
+            },
+            {
+              Action: 's3:PutObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins'],
+                },
+              },
+            },
+            {
+              Action: 's3:DeleteObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/*`,
+              Condition: {
+                'ForAnyValue:StringEquals': {
+                  'cognito:groups': ['Admins'],
+                },
+              },
+            },
+          ],
+          Version: '2012-10-17',
+        },
+      );
+      assert.deepStrictEqual(
+        acceptResourceAccessMock.mock.calls[0].arguments[1],
+        ssmEnvironmentEntriesStub,
+      );
+      assert.deepStrictEqual(storageAccessDefinitionOutput, {
+        'profile-pictures/*': {
+          groupsAdmins: ['get', 'list', 'write', 'delete'],
         },
       });
     });
