@@ -172,4 +172,44 @@ void describe('storageAccessBuilder', () => {
       [group1AccessAcceptorMock, group2AccessAcceptorMock],
     );
   });
+
+  void it('builds storage access definition for groups with entity respect', () => {
+    const accessDefinition = roleAccessBuilder
+      .groups(['group1Name', 'group2Name'])
+      .respectingEntity()
+      .to(['read', 'write']);
+
+    assert.deepStrictEqual(accessDefinition.actions, ['read', 'write']);
+    assert.equal(
+      accessDefinition.idSubstitution,
+      '${cognito-identity.amazonaws.com:sub}',
+    );
+    assert.deepStrictEqual(
+      accessDefinition.getResourceAccessAcceptors.map(
+        (getResourceAccessAcceptor) =>
+          getResourceAccessAcceptor(stubGetInstanceProps),
+      ),
+      [group1AccessAcceptorMock, group2AccessAcceptorMock],
+    );
+    assert.deepStrictEqual(accessDefinition.uniqueDefinitionIdValidations, [
+      {
+        uniqueDefinitionId: 'groupsgroup1NameRespectingEntity',
+        validationErrorOptions: {
+          message:
+            'Group access definition for group1Name with entity respect specified multiple times.',
+          resolution:
+            'Combine all access definitions for group1Name with entity respect on a single path into one access rule.',
+        },
+      },
+      {
+        uniqueDefinitionId: 'groupsgroup2NameRespectingEntity',
+        validationErrorOptions: {
+          message:
+            'Group access definition for group2Name with entity respect specified multiple times.',
+          resolution:
+            'Combine all access definitions for group2Name with entity respect on a single path into one access rule.',
+        },
+      },
+    ]);
+  });
 });

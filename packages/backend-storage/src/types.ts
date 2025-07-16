@@ -65,7 +65,7 @@ export type StorageAccessBuilder = {
    * For a path like `media/profile-pictures/{entity_id}/*`, this means access is configured for that specific group for any file within
    * `media/profile-pictures/*`.
    */
-  groups: (groupNames: string[]) => StorageActionBuilder;
+  groups: (groupNames: string[]) => GroupsBuilder;
   /**
    * Configure owner-based access. Requires `defineAuth` in the backend definition.
    * @see https://docs.amplify.aws/gen2/build-a-backend/storage/#owner-based-access
@@ -85,6 +85,25 @@ export type StorageAccessBuilder = {
     other: ConstructFactory<ResourceProvider & ResourceAccessAcceptorFactory>,
   ) => StorageActionBuilder;
 };
+
+/**
+ * Builder for configuring group storage access with additional options
+ * @public
+ */
+export type GroupsBuilder = {
+  /**
+   * Configure groups to respect entity boundaries when accessing paths with {entity_id} tokens.
+   * When this is used, groups will only have access to files within their own entity scope,
+   * rather than having wildcard access to all files in the path.
+   * @example
+   * // Regular group access - gets wildcard access to all files
+   * allow.groups(['Admins']).to(['read', 'write'])
+   *
+   * // Entity-respecting group access - only access their own files
+   * allow.groups(['Admins']).respectingEntity().to(['read', 'write'])
+   */
+  respectingEntity: () => StorageActionBuilder;
+} & StorageActionBuilder;
 
 export type StorageActionBuilder = {
   /**

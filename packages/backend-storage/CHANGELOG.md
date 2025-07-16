@@ -1,5 +1,14 @@
 # @aws-amplify/backend-storage
 
+## 1.4.2
+
+### Minor Changes
+
+- Added `respectingEntity()` method to group storage access for entity-scoped permissions
+  - Groups can now use `allow.groups(['Admins']).respectingEntity().to(['read', 'write'])` to get entity-specific access
+  - This provides fine-grained control over group permissions while maintaining backward compatibility
+  - When used with paths containing `{entity_id}`, groups only get access to their own files instead of wildcard access
+
 ## 1.4.1
 
 ### Patch Changes

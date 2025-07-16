@@ -4,7 +4,7 @@ import {
   ResourceAccessAcceptorFactory,
   ResourceProvider,
 } from '@aws-amplify/plugin-types';
-import { StorageAccessBuilder } from './types.js';
+import { GroupsBuilder, StorageAccessBuilder } from './types.js';
 import { entityIdSubstitution } from './constants.js';
 
 export const roleAccessBuilder: StorageAccessBuilder = {
@@ -40,23 +40,44 @@ export const roleAccessBuilder: StorageAccessBuilder = {
       idSubstitution: '*',
     }),
   },
-  groups: (groupNames) => ({
-    to: (actions) => ({
-      getResourceAccessAcceptors: groupNames.map(
-        (groupName) => (getInstanceProps) =>
-          getUserRoleResourceAccessAcceptor(getInstanceProps, groupName),
-      ),
-      uniqueDefinitionIdValidations: groupNames.map((groupName) => ({
-        uniqueDefinitionId: `groups${groupName}`,
-        validationErrorOptions: {
-          message: `Group access definition for ${groupName} specified multiple times.`,
-          resolution: `Combine all access definitions for ${groupName} on a single path into one access rule.`,
-        },
-      })),
-      actions,
-      idSubstitution: '*',
-    }),
-  }),
+  groups: (groupNames) => {
+    const baseBuilder: GroupsBuilder = {
+      to: (actions) => ({
+        getResourceAccessAcceptors: groupNames.map(
+          (groupName) => (getInstanceProps) =>
+            getUserRoleResourceAccessAcceptor(getInstanceProps, groupName),
+        ),
+        uniqueDefinitionIdValidations: groupNames.map((groupName) => ({
+          uniqueDefinitionId: `groups${groupName}`,
+          validationErrorOptions: {
+            message: `Group access definition for ${groupName} specified multiple times.`,
+            resolution: `Combine all access definitions for ${groupName} on a single path into one access rule.`,
+          },
+        })),
+        actions,
+        idSubstitution: '*',
+      }),
+      respectingEntity: () => ({
+        to: (actions) => ({
+          getResourceAccessAcceptors: groupNames.map(
+            (groupName) =>
+              (getInstanceProps: ConstructFactoryGetInstanceProps) =>
+                getUserRoleResourceAccessAcceptor(getInstanceProps, groupName),
+          ),
+          uniqueDefinitionIdValidations: groupNames.map((groupName) => ({
+            uniqueDefinitionId: `groups${groupName}RespectingEntity`,
+            validationErrorOptions: {
+              message: `Group access definition for ${groupName} with entity respect specified multiple times.`,
+              resolution: `Combine all access definitions for ${groupName} with entity respect on a single path into one access rule.`,
+            },
+          })),
+          actions,
+          idSubstitution: entityIdSubstitution,
+        }),
+      }),
+    };
+    return baseBuilder;
+  },
   entity: (entityId) => ({
     to: (actions) => ({
       getResourceAccessAcceptors: [getAuthRoleResourceAccessAcceptor],

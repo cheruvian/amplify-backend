@@ -772,6 +772,88 @@ void describe('StorageAccessOrchestrator', () => {
         },
       });
     });
+
+    void it('groups should get entity-specific access when entity_id is in the path', () => {
+      const acceptResourceAccessMock = mock.fn();
+      const groupResourceAccessAcceptor = () => ({
+        identifier: 'groupResourceAccessAcceptor',
+        acceptResourceAccess: acceptResourceAccessMock,
+      });
+
+      const storageAccessOrchestrator = new StorageAccessOrchestrator(
+        () => ({
+          [`profile-pictures/${entityIdPathToken}/*`]: [
+            {
+              actions: ['read', 'write', 'delete'],
+              getResourceAccessAcceptors: [groupResourceAccessAcceptor],
+              idSubstitution: entityIdSubstitution, // This is now set by respectingEntity()
+              uniqueDefinitionIdValidations: [
+                {
+                  uniqueDefinitionId: 'groupWithEntityId',
+                  validationErrorOptions: {
+                    message:
+                      'test duplicate id message for groupWithEntityId identifier',
+                    resolution: 'test resolution for groupWithEntityId',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+        {} as unknown as ConstructFactoryGetInstanceProps,
+        ssmEnvironmentEntriesStub,
+        storageAccessPolicyFactory,
+      );
+
+      const storageAccessDefinitionOutput =
+        storageAccessOrchestrator.orchestrateStorageAccess();
+      assert.equal(acceptResourceAccessMock.mock.callCount(), 1);
+      assert.deepStrictEqual(
+        acceptResourceAccessMock.mock.calls[0].arguments[0].document.toJSON(),
+        {
+          Statement: [
+            {
+              Action: 's3:GetObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+            },
+            {
+              Action: 's3:ListBucket',
+              Effect: 'Allow',
+              Resource: bucket.bucketArn,
+              Condition: {
+                StringLike: {
+                  's3:prefix': [
+                    `profile-pictures/${entityIdSubstitution}/*`,
+                    `profile-pictures/${entityIdSubstitution}/`,
+                  ],
+                },
+              },
+            },
+            {
+              Action: 's3:PutObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+            },
+            {
+              Action: 's3:DeleteObject',
+              Effect: 'Allow',
+              Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
+            },
+          ],
+          Version: '2012-10-17',
+        },
+      );
+      assert.deepStrictEqual(
+        acceptResourceAccessMock.mock.calls[0].arguments[1],
+        ssmEnvironmentEntriesStub,
+      );
+      assert.deepStrictEqual(storageAccessDefinitionOutput, {
+        [`profile-pictures/${entityIdSubstitution}/*`]: {
+          groupWithEntityId: ['get', 'list', 'write', 'delete'],
+        },
+      });
+    });
   });
 });
 
