@@ -1,6 +1,5 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
-import { text } from 'node:stream/consumers';
 import { GraphqlRequestExecutor } from './graphql_request_executor';
 import { UserAgentProvider } from './user_agent_provider';
 import { ConversationTurnEvent } from './types';
@@ -47,7 +46,7 @@ void describe('Graphql executor test', () => {
     assert.strictEqual(request.headers.get('Authorization'), accessToken);
     assert.strictEqual(request.headers.get('x-amz-user-agent'), userAgent);
     assert.ok(request.body);
-    assert.deepStrictEqual(JSON.parse(await text(request.body)), {
+    assert.deepStrictEqual(JSON.parse(await request.text()), {
       query: 'testQuery',
       variables: { testVariableKey: 'testVariableValue' },
     });
