@@ -94,6 +94,13 @@ export class StorageAccessOrchestrator {
       this.roleAccessBuilder,
     );
 
+    // DEBUG: Log the storage access definition to see what's being generated
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔍 DEBUG: Storage Access Definition:',
+      JSON.stringify(storageAccessDefinition, null, 2),
+    );
+
     // verify that the paths in the access definition are valid
     this.validateStorageAccessPaths(Object.keys(storageAccessDefinition));
 
@@ -104,6 +111,24 @@ export class StorageAccessOrchestrator {
     Object.entries(storageAccessDefinition).forEach(
       ([s3Prefix, accessPermissions]) => {
         const uniqueDefinitionIdSet = new Set<string>();
+
+        // DEBUG: Log each path and its permissions
+        // eslint-disable-next-line no-console
+        console.log(
+          `🔍 DEBUG: Processing path "${s3Prefix}" with ${accessPermissions.length} permissions:`,
+        );
+        accessPermissions.forEach((permission, index) => {
+          // eslint-disable-next-line no-console
+          console.log(`  Permission ${index + 1}:`, {
+            actions: permission.actions,
+            idSubstitution: permission.idSubstitution,
+            groupConditions: permission.groupConditions,
+            uniqueDefinitionIds: permission.uniqueDefinitionIdValidations.map(
+              (v) => v.uniqueDefinitionId,
+            ),
+          });
+        });
+
         // iterate over all of the access definitions for a given prefix
         accessPermissions.forEach((permission) => {
           const accessConfig: StorageAccessConfig = {};
@@ -151,6 +176,12 @@ export class StorageAccessOrchestrator {
             permission.idSubstitution,
           );
 
+          // DEBUG: Log the prefix substitution
+          // eslint-disable-next-line no-console
+          console.log(
+            `🔍 DEBUG: Prefix substitution: "${s3Prefix}" -> "${prefix}" (idSubstitution: "${permission.idSubstitution}")`,
+          );
+
           storageOutputAccessDefinition[prefix] = {
             ...storageOutputAccessDefinition[prefix],
             ...accessConfig,
@@ -159,8 +190,21 @@ export class StorageAccessOrchestrator {
           // set an entry that maps this permission to each resource acceptor
           permission.getResourceAccessAcceptors.forEach(
             (getResourceAccessAcceptor) => {
+              const resourceAccessAcceptor = getResourceAccessAcceptor(
+                this.getInstanceProps,
+              );
+              // DEBUG: Log resource access acceptor details
+              // eslint-disable-next-line no-console
+              console.log(
+                `🔍 DEBUG: Adding access definition for acceptor "${resourceAccessAcceptor.identifier}" on prefix "${prefix}":`,
+                {
+                  actions: noDuplicateActions,
+                  groupConditions: permission.groupConditions,
+                },
+              );
+
               this.addAccessDefinition(
-                getResourceAccessAcceptor(this.getInstanceProps),
+                resourceAccessAcceptor,
                 noDuplicateActions,
                 prefix,
                 permission.groupConditions,
@@ -169,6 +213,22 @@ export class StorageAccessOrchestrator {
           );
         });
       },
+    );
+
+    // DEBUG: Log the final acceptor access map
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔍 DEBUG: Final acceptor access map:',
+      Array.from(this.acceptorAccessMap.entries()).map(([token, data]) => ({
+        acceptorToken: token,
+        actionCount: data.accessMap.size,
+        actions: Array.from(data.accessMap.keys()),
+        paths: Array.from(data.accessMap.values()).map((v) => ({
+          allow: Array.from(v.allow),
+          deny: Array.from(v.deny),
+          groupConditions: v.groupConditions,
+        })),
+      })),
     );
 
     // iterate over the access map entries and invoke each ResourceAccessAcceptor to accept the permissions
