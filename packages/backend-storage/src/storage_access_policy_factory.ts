@@ -42,6 +42,18 @@ export class StorageAccessPolicyFactory {
       });
     }
 
+    // DEBUG: Log what permissions are being processed for policy creation
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔧 StorageAccessPolicyFactory - Creating policy with permissions:',
+      Array.from(permissions.entries()).map(([action, data]) => ({
+        action,
+        allowPaths: Array.from(data.allow),
+        denyPaths: Array.from(data.deny),
+        groupConditions: data.groupConditions,
+      })),
+    );
+
     const statements: PolicyStatement[] = [];
 
     permissions.forEach(
@@ -50,6 +62,16 @@ export class StorageAccessPolicyFactory {
         action,
       ) => {
         if (allowPrefixes.size > 0) {
+          // DEBUG: Log what we're about to create a statement for
+          // eslint-disable-next-line no-console
+          console.log(
+            `🔧 StorageAccessPolicyFactory - Creating ALLOW statement for action "${action}":`,
+            {
+              allowPrefixes: Array.from(allowPrefixes),
+              groupConditions,
+            },
+          );
+
           statements.push(
             this.getStatement(
               allowPrefixes,
@@ -79,13 +101,22 @@ export class StorageAccessPolicyFactory {
       });
     }
 
-    return new Policy(
+    const policy = new Policy(
       this.stack,
       `${this.stack.node.path}Access${this.stack.node.children.length}`,
       {
         statements,
       },
     );
+
+    // DEBUG: Log the final policy document
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔧 StorageAccessPolicyFactory - Final policy document:',
+      JSON.stringify(policy.document.toJSON(), null, 2),
+    );
+
+    return policy;
   };
 
   private getStatement = (
@@ -94,6 +125,18 @@ export class StorageAccessPolicyFactory {
     effect: Effect,
     groupConditions?: string[],
   ) => {
+    // DEBUG: Log what statement is being created
+    // eslint-disable-next-line no-console
+    console.log(
+      `🔧 StorageAccessPolicyFactory - Creating statement for action "${action}":`,
+      {
+        effect: effect.toString(),
+        s3Prefixes: Array.from(s3Prefixes),
+        groupConditions,
+        bucketArn: this.bucket.bucketArn,
+      },
+    );
+
     const baseConditions: Record<string, Record<string, string[]>> = {};
     if (groupConditions && groupConditions.length > 0) {
       baseConditions['ForAnyValue:StringEquals'] = {
@@ -104,16 +147,26 @@ export class StorageAccessPolicyFactory {
     switch (action) {
       case 'delete':
       case 'get':
-      case 'write':
+      case 'write': {
+        const resources = Array.from(s3Prefixes).map(
+          (s3Prefix) => `${this.bucket.bucketArn}/${s3Prefix}`,
+        );
+
+        // DEBUG: Log the final resources for object-level actions
+        // eslint-disable-next-line no-console
+        console.log(
+          `🔧 StorageAccessPolicyFactory - Object-level resources for "${action}":`,
+          resources,
+        );
+
         return new PolicyStatement({
           effect,
           actions: actionMap[action],
-          resources: Array.from(s3Prefixes).map(
-            (s3Prefix) => `${this.bucket.bucketArn}/${s3Prefix}`,
-          ),
+          resources,
           conditions:
             Object.keys(baseConditions).length > 0 ? baseConditions : undefined,
         });
+      }
       case 'list': {
         const listConditions = {
           StringLike: {
@@ -121,6 +174,14 @@ export class StorageAccessPolicyFactory {
           },
           ...baseConditions,
         };
+
+        // DEBUG: Log the list conditions
+        // eslint-disable-next-line no-console
+        console.log(
+          `🔧 StorageAccessPolicyFactory - List conditions:`,
+          listConditions,
+        );
+
         return new PolicyStatement({
           effect,
           actions: actionMap[action],

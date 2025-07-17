@@ -375,11 +375,54 @@ export class StorageAccessOrchestrator {
     });
 
     this.acceptorAccessMap.forEach(({ acceptor, accessMap }) => {
+      // DEBUG: Log what access map is being processed for this acceptor
+      // eslint-disable-next-line no-console
+      console.log(
+        `🔧 StorageAccessOrchestrator - Processing acceptor "${acceptor.identifier}":`,
+        {
+          accessMapSize: accessMap.size,
+          accessMapEntries: Array.from(accessMap.entries()).map(
+            ([action, data]) => ({
+              action,
+              allowPaths: Array.from(data.allow),
+              denyPaths: Array.from(data.deny),
+              groupConditions: data.groupConditions,
+            }),
+          ),
+        },
+      );
+
       // removing subpaths from the allow set prevents unnecessary paths from being added to the policy
       // for example, if there are allow read rules for /foo/* and /foo/bar/* we only need to add /foo/* to the policy because that includes /foo/bar/*
       accessMap.forEach(({ allow }) => {
+        // DEBUG: Log what paths are being processed for subpath removal
+        const pathsBefore = Array.from(allow);
         removeSubPathsFromSet(allow);
+        const pathsAfter = Array.from(allow);
+
+        // eslint-disable-next-line no-console
+        console.log(
+          `🔧 StorageAccessOrchestrator - Subpath removal for "${acceptor.identifier}":`,
+          {
+            pathsBefore,
+            pathsAfter,
+            removedPaths: pathsBefore.filter((p) => !pathsAfter.includes(p)),
+          },
+        );
       });
+
+      // DEBUG: Log final access map being sent to policy factory
+      // eslint-disable-next-line no-console
+      console.log(
+        `🔧 StorageAccessOrchestrator - Final access map for "${acceptor.identifier}" being sent to policy factory:`,
+        Array.from(accessMap.entries()).map(([action, data]) => ({
+          action,
+          allowPaths: Array.from(data.allow),
+          denyPaths: Array.from(data.deny),
+          groupConditions: data.groupConditions,
+        })),
+      );
+
       acceptor.acceptResourceAccess(
         this.policyFactory.createPolicy(accessMap),
         ssmEnvironmentEntries,
@@ -457,7 +500,29 @@ const findParent = (path: string, paths: string[]) =>
 
 const removeSubPathsFromSet = (paths: Set<StoragePath>) => {
   paths.forEach((path) => {
-    if (findParent(path, Array.from(paths))) {
+    const parent = findParent(path, Array.from(paths));
+    if (parent) {
+      // CRITICAL FIX: Don't remove entity-specific paths as subpaths of wildcard paths
+      // Entity paths like "path/${cognito-identity.amazonaws.com:sub}/*" should NOT be
+      // treated as subpaths of wildcard paths like "path/*" because:
+      // 1. They generate different resource ARNs in IAM policies
+      // 2. Entity paths have no group conditions (any authenticated user on their own resources)
+      // 3. Wildcard paths may have group conditions (specific groups on any resources)
+
+      const isEntityPath = path.includes(entityIdSubstitution);
+      const isParentWildcard =
+        parent.includes('*') && !parent.includes(entityIdSubstitution);
+
+      // If this is an entity-specific path and the parent is a wildcard path,
+      // don't remove it as they serve different authorization purposes
+      if (isEntityPath && isParentWildcard) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `🔧 FIXED: Not removing entity path "${path}" as subpath of wildcard parent "${parent}" - they serve different authorization purposes`,
+        );
+        return; // Skip removal
+      }
+
       paths.delete(path);
     }
   });
