@@ -234,6 +234,8 @@ export class StorageAccessOrchestrator {
     if (definitionId.startsWith('entity') && definitionId.includes('InGroups'))
       return 'Entity with group restrictions';
     if (definitionId.startsWith('entity')) return 'Entity access';
+    if (definitionId.startsWith('resource_'))
+      return `Resource access (${definitionId})`;
     if (definitionId === 'resource') return 'Resource access';
     return definitionId;
   };

@@ -1,6 +1,7 @@
 import {
   AuthResources,
   AuthRoleName,
+  ConstructFactory,
   ConstructFactoryGetInstanceProps,
   ResourceAccessAcceptor,
   ResourceAccessAcceptorFactory,
@@ -9,6 +10,22 @@ import {
 import { AmplifyUserError } from '@aws-amplify/platform-core';
 import { EntityActionBuilder, StorageAccessBuilder } from './types.js';
 import { entityIdSubstitution } from './constants.js';
+
+// WeakMap to track unique identifiers for each resource
+const resourceIdentifierMap = new WeakMap<
+  ConstructFactory<ResourceProvider & ResourceAccessAcceptorFactory>,
+  string
+>();
+let resourceCounter = 0;
+
+const getResourceIdentifier = (
+  resource: ConstructFactory<ResourceProvider & ResourceAccessAcceptorFactory>,
+): string => {
+  if (!resourceIdentifierMap.has(resource)) {
+    resourceIdentifierMap.set(resource, `resource_${++resourceCounter}`);
+  }
+  return resourceIdentifierMap.get(resource)!;
+};
 
 export const roleAccessBuilder: StorageAccessBuilder = {
   authenticated: {
@@ -102,26 +119,29 @@ export const roleAccessBuilder: StorageAccessBuilder = {
       }),
     }),
   }),
-  resource: (other) => ({
-    to: (actions) => ({
-      getResourceAccessAcceptors: [
-        (getInstanceProps: ConstructFactoryGetInstanceProps) =>
-          other.getInstance(getInstanceProps).getResourceAccessAcceptor(),
-      ],
-      uniqueDefinitionIdValidations: [
-        {
-          uniqueDefinitionId: `resource`,
-          validationErrorOptions: {
-            message: `Storage access definition for resource access specified multiple times on the same path.`,
-            resolution: `Combine all resource access definitions on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.resource(myFunction).to(['read']),\n    allow.resource(myFunction).to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.resource(myFunction).to(['read', 'write'])\n  ]`,
-            details: `Access type: resource access\nActions requested: [${actions.join(', ')}]\nResource: external resource`,
+  resource: (other) => {
+    const resourceId = getResourceIdentifier(other);
+    return {
+      to: (actions) => ({
+        getResourceAccessAcceptors: [
+          (getInstanceProps: ConstructFactoryGetInstanceProps) =>
+            other.getInstance(getInstanceProps).getResourceAccessAcceptor(),
+        ],
+        uniqueDefinitionIdValidations: [
+          {
+            uniqueDefinitionId: resourceId,
+            validationErrorOptions: {
+              message: `Storage access definition for this specific resource specified multiple times on the same path.`,
+              resolution: `Combine all access definitions for this specific resource on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.resource(myFunction).to(['read']),\n    allow.resource(myFunction).to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.resource(myFunction).to(['read', 'write'])\n  ]\n\nNote: Different resources can have separate access rules on the same path.`,
+              details: `Access type: resource access\nActions requested: [${actions.join(', ')}]\nResource identifier: ${resourceId}`,
+            },
           },
-        },
-      ],
-      actions,
-      idSubstitution: '*',
-    }),
-  }),
+        ],
+        actions,
+        idSubstitution: '*',
+      }),
+    };
+  },
 };
 
 const getAuthRoleResourceAccessAcceptor = (
