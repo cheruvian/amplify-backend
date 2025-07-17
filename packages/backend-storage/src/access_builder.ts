@@ -18,8 +18,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
         {
           uniqueDefinitionId: `authenticated`,
           validationErrorOptions: {
-            message: `Entity access definition for authenticated users specified multiple times.`,
-            resolution: `Combine all access definitions for authenticated users on a single path into one access rule.`,
+            message: `Storage access definition for authenticated users specified multiple times on the same path.`,
+            resolution: `Combine all access definitions for authenticated users on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.authenticated.to(['read']),\n    allow.authenticated.to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.authenticated.to(['read', 'write'])\n  ]`,
+            details: `Access type: authenticated users\nActions requested: [${actions.join(', ')}]`,
           },
         },
       ],
@@ -34,8 +35,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
         {
           uniqueDefinitionId: `guest`,
           validationErrorOptions: {
-            message: `Entity access definition for guest users specified multiple times.`,
-            resolution: `Combine all access definitions for guest users on a single path into one access rule.`,
+            message: `Storage access definition for guest users specified multiple times on the same path.`,
+            resolution: `Combine all access definitions for guest users on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.guest.to(['read']),\n    allow.guest.to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.guest.to(['read', 'write'])\n  ]`,
+            details: `Access type: guest users\nActions requested: [${actions.join(', ')}]`,
           },
         },
       ],
@@ -52,8 +54,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
         {
           uniqueDefinitionId: `groups${groupNames.join('')}`,
           validationErrorOptions: {
-            message: `Group access definition for groups [${groupNames.join(', ')}] specified multiple times.`,
-            resolution: `Combine all access definitions for these groups on a single path into one access rule.`,
+            message: `Storage access definition for groups [${groupNames.join(', ')}] specified multiple times on the same path.`,
+            resolution: `Combine all access definitions for these groups on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.groups(['${groupNames.join("', '")}]).to(['read']),\n    allow.groups(['${groupNames.join("', '")}]).to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.groups(['${groupNames.join("', '")}]).to(['read', 'write'])\n  ]`,
+            details: `Access type: groups [${groupNames.join(', ')}]\nActions requested: [${actions.join(', ')}]\nGroup count: ${groupNames.length}`,
           },
         },
       ],
@@ -69,8 +72,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
         {
           uniqueDefinitionId: `entity${entityId}`,
           validationErrorOptions: {
-            message: `Entity access definition for ${entityId} specified multiple times.`,
-            resolution: `Combine all access definitions for ${entityId} on a single path into one access rule.`,
+            message: `Storage access definition for entity '${entityId}' specified multiple times on the same path.`,
+            resolution: `Combine all access definitions for entity '${entityId}' on a single path into one access rule. For example, instead of:\n  'path/{entity_id}/*': [\n    allow.entity('${entityId}').to(['read']),\n    allow.entity('${entityId}').to(['write'])\n  ]\nUse:\n  'path/{entity_id}/*': [\n    allow.entity('${entityId}').to(['read', 'write'])\n  ]`,
+            details: `Access type: entity '${entityId}'\nActions requested: [${actions.join(', ')}]\nID substitution: ${entityIdSubstitution}`,
           },
         },
       ],
@@ -86,8 +90,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
           {
             uniqueDefinitionId: `entity${entityId}InGroups${groupNames.join('')}`,
             validationErrorOptions: {
-              message: `Entity access definition for ${entityId} in groups [${groupNames.join(', ')}] specified multiple times.`,
-              resolution: `Combine all access definitions for ${entityId} in these groups on a single path into one access rule.`,
+              message: `Storage access definition for entity '${entityId}' in groups [${groupNames.join(', ')}] specified multiple times on the same path.`,
+              resolution: `Combine all access definitions for entity '${entityId}' in these groups on a single path into one access rule. For example, instead of:\n  'path/{entity_id}/*': [\n    allow.entity('${entityId}').inGroups(['${groupNames.join("', '")}]).to(['read']),\n    allow.entity('${entityId}').inGroups(['${groupNames.join("', '")}]).to(['write'])\n  ]\nUse:\n  'path/{entity_id}/*': [\n    allow.entity('${entityId}').inGroups(['${groupNames.join("', '")}]).to(['read', 'write'])\n  ]`,
+              details: `Access type: entity '${entityId}' restricted to groups [${groupNames.join(', ')}]\nActions requested: [${actions.join(', ')}]\nGroup restrictions: ${groupNames.length} groups\nID substitution: ${entityIdSubstitution}`,
             },
           },
         ],
@@ -107,8 +112,9 @@ export const roleAccessBuilder: StorageAccessBuilder = {
         {
           uniqueDefinitionId: `resource`,
           validationErrorOptions: {
-            message: `Resource access definition specified multiple times.`,
-            resolution: `Combine all resource access definitions on a single path into one access rule.`,
+            message: `Storage access definition for resource access specified multiple times on the same path.`,
+            resolution: `Combine all resource access definitions on a single path into one access rule. For example, instead of:\n  'path/*': [\n    allow.resource(myFunction).to(['read']),\n    allow.resource(myFunction).to(['write'])\n  ]\nUse:\n  'path/*': [\n    allow.resource(myFunction).to(['read', 'write'])\n  ]`,
+            details: `Access type: resource access\nActions requested: [${actions.join(', ')}]\nResource: external resource`,
           },
         },
       ],
@@ -168,6 +174,7 @@ const createGroupsResourceAccessAcceptor = (
       throw new AmplifyUserError('IncompatibleGroupRolesError', {
         message: `Groups [${groupsWithRoles.join(', ')}] have dedicated IAM roles assigned, which is incompatible with conditional storage access.`,
         resolution: `Remove the role assignments from these User Pool groups, or use storage access that doesn't rely on group conditions. When groups have dedicated roles, users assume those roles instead of the base authenticated role where conditional policies are attached.`,
+        details: `🔄 MIGRATION GUIDE for group-entities changes:\n\nThis error occurs because you have User Pool groups with dedicated IAM roles, but the new storage access system uses conditional policies on the base authenticated role instead.\n\nTo fix this:\n1. Remove role assignments from groups: [${groupsWithRoles.join(', ')}]\n2. Groups will now use conditional access on the authenticated role\n3. This provides better security and more granular control\n\n📋 What changed:\n• Groups no longer get individual IAM roles by default\n• Group access is now handled through conditional policies\n• Entity access can be restricted to specific groups\n• Better support for fine-grained permissions\n\n🛠️ Example migration:\nBEFORE: Group had dedicated role + storage access\nAFTER: Group uses conditional access on authenticated role\n\nFor more details, see the storage access documentation.`,
       });
     }
 

@@ -5,6 +5,7 @@ import {
 } from '@aws-amplify/plugin-types';
 import {
   StorageAccessBuilder,
+  StorageAccessDefinition,
   StorageAccessGenerator,
   StoragePath,
 } from './types.js';
@@ -120,9 +121,22 @@ export class StorageAccessOrchestrator {
           permission.uniqueDefinitionIdValidations.forEach(
             ({ uniqueDefinitionId, validationErrorOptions }) => {
               if (uniqueDefinitionIdSet.has(uniqueDefinitionId)) {
+                // Generate a helpful summary of all configurations for this path
+                const configSummary = this.generateStorageConfigSummary(
+                  s3Prefix,
+                  accessPermissions,
+                );
+
+                // Enhanced error message with specific details about the duplicate
+                const enhancedErrorOptions = {
+                  ...validationErrorOptions,
+                  message: `${validationErrorOptions.message}\n\nDuplicate found on storage path: '${s3Prefix}'\nDuplicate access definition ID: '${uniqueDefinitionId}'\nThis typically happens when you have multiple access rules for the same entity type on the same path.`,
+                  details: `Storage path: ${s3Prefix}\nDuplicate definition: ${uniqueDefinitionId}\nActions in this permission: [${permission.actions.join(', ')}]\nID substitution: ${permission.idSubstitution}${permission.groupConditions ? `\nGroup conditions: [${permission.groupConditions.join(', ')}]` : ''}\n\nFull configuration summary for this path:\n${configSummary}`,
+                };
+
                 throw new AmplifyUserError<StorageError>(
                   'InvalidStorageAccessDefinitionError',
-                  validationErrorOptions,
+                  enhancedErrorOptions,
                 );
               } else {
                 uniqueDefinitionIdSet.add(uniqueDefinitionId);
@@ -161,6 +175,67 @@ export class StorageAccessOrchestrator {
     this.attachPolicies(this.ssmEnvironmentEntries);
 
     return storageOutputAccessDefinition;
+  };
+
+  /**
+   * Generates a helpful summary of all storage access configurations for a given path
+   * to help developers understand what configurations are conflicting
+   */
+  private generateStorageConfigSummary = (
+    s3Prefix: string,
+    accessPermissions: StorageAccessDefinition[],
+  ): string => {
+    const summary = [
+      `Storage path: '${s3Prefix}'`,
+      `Total access rules: ${accessPermissions.length}`,
+      '',
+    ];
+
+    accessPermissions.forEach((permission, index) => {
+      const ruleNumber = index + 1;
+      summary.push(`Rule ${ruleNumber}:`);
+      summary.push(`  Actions: [${permission.actions.join(', ')}]`);
+      summary.push(`  ID substitution: ${permission.idSubstitution}`);
+
+      if (permission.groupConditions && permission.groupConditions.length > 0) {
+        summary.push(
+          `  Group conditions: [${permission.groupConditions.join(', ')}]`,
+        );
+      }
+
+      // Try to identify the access type from the unique definition IDs
+      const definitionIds = permission.uniqueDefinitionIdValidations.map(
+        (v) => v.uniqueDefinitionId,
+      );
+      const accessType = this.identifyAccessType(definitionIds[0] || 'unknown');
+      summary.push(`  Access type: ${accessType}`);
+      summary.push(`  Definition IDs: [${definitionIds.join(', ')}]`);
+      summary.push('');
+    });
+
+    summary.push('💡 To fix duplicate access definitions:');
+    summary.push(
+      '   Combine multiple rules for the same access type into a single rule with all required actions.',
+    );
+    summary.push(
+      "   Example: allow.authenticated.to(['read', 'write']) instead of separate rules.",
+    );
+
+    return summary.join('\n');
+  };
+
+  /**
+   * Helper to identify the human-readable access type from a definition ID
+   */
+  private identifyAccessType = (definitionId: string): string => {
+    if (definitionId === 'authenticated') return 'Authenticated users';
+    if (definitionId === 'guest') return 'Guest users';
+    if (definitionId.startsWith('groups')) return 'User groups';
+    if (definitionId.startsWith('entity') && definitionId.includes('InGroups'))
+      return 'Entity with group restrictions';
+    if (definitionId.startsWith('entity')) return 'Entity access';
+    if (definitionId === 'resource') return 'Resource access';
+    return definitionId;
   };
 
   /**
