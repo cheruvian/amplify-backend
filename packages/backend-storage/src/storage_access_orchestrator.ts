@@ -335,48 +335,8 @@ export class StorageAccessOrchestrator {
         // this is where we create the reverse mapping that allows us to add entries to the denySet later by looking up the prefix
         this.setPrefixDenyMapEntry(s3Prefix, allowSet, denySet);
       } else {
-        // CRITICAL FIX: Don't combine paths with different group conditions!
-        // Entity access (no group conditions) and group access (with group conditions)
-        // should generate separate policy statements
-        const existing = accessMap.get(action)!;
-        const existingGroupConditions = existing.groupConditions;
-        const newGroupConditions = groupConditions;
-
-        // Check if group conditions match
-        const groupConditionsMatch =
-          (existingGroupConditions === undefined &&
-            newGroupConditions === undefined) ||
-          (existingGroupConditions !== undefined &&
-            newGroupConditions !== undefined &&
-            existingGroupConditions.length === newGroupConditions.length &&
-            existingGroupConditions.every((g) =>
-              newGroupConditions.includes(g),
-            ));
-
-        if (!groupConditionsMatch) {
-          // Different group conditions - we need to create separate policy statements
-          // This is a limitation of the current access map structure
-          // For now, let's log this case and throw an error
-          // eslint-disable-next-line no-console
-          console.error(
-            `🔧 ERROR: Cannot combine paths with different group conditions for action "${action}"`,
-            {
-              existingGroupConditions,
-              newGroupConditions,
-              existingPaths: Array.from(existing.allow),
-              newPath: s3Prefix,
-            },
-          );
-
-          throw new AmplifyUserError('StorageAccessPolicyConflictError', {
-            message: `Cannot combine storage access definitions with different group conditions for the same action.`,
-            resolution: `This is a known limitation. Entity access and group access for the same action on the same acceptor need to be restructured.`,
-            details: `Action: ${action}, Existing groups: [${existingGroupConditions?.join(', ') || 'none'}], New groups: [${newGroupConditions?.join(', ') || 'none'}]`,
-          });
-        }
-
         // Group conditions match, safe to combine
-        const { allow: allowSet, deny: denySet } = existing;
+        const { allow: allowSet, deny: denySet } = accessMap.get(action)!;
         allowSet.add(s3Prefix);
 
         // add an entry in the prefixDenyMap for the existing allow and deny set

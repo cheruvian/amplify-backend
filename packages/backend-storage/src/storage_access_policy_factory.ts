@@ -54,58 +54,86 @@ export class StorageAccessPolicyFactory {
       })),
     );
 
-    const statements: PolicyStatement[] = [];
+    // Group permissions by BOTH action AND group conditions to create separate statements
+    // Entity access (no group conditions) and group access (with group conditions)
+    // must generate separate IAM statements even for the same action
+    const statementGroups = new Map<
+      string, // Key: `${action}::${groupConditions?.join(',') || 'no-groups'}`
+      {
+        action: InternalStorageAction;
+        allow: Set<StoragePath>;
+        deny: Set<StoragePath>;
+        groupConditions?: string[];
+      }
+    >();
 
-    permissions.forEach(
-      (
-        { allow: allowPrefixes, deny: denyPrefixes, groupConditions },
-        action,
-      ) => {
-        if (allowPrefixes.size > 0) {
-          // DEBUG: Log what we're about to create a statement for
-          // eslint-disable-next-line no-console
-          console.log(
-            `🔧 StorageAccessPolicyFactory - Creating ALLOW statement for action "${action}":`,
-            {
-              allowPrefixes: Array.from(allowPrefixes),
-              groupConditions,
-            },
-          );
+    permissions.forEach((data, action) => {
+      const groupKey = `${action}::${data.groupConditions?.join(',') || 'no-groups'}`;
 
-          statements.push(
-            this.getStatement(
-              allowPrefixes,
-              action,
-              Effect.ALLOW,
-              groupConditions,
-            ),
-          );
-        }
-        if (denyPrefixes.size > 0) {
-          statements.push(
-            this.getStatement(
-              denyPrefixes,
-              action,
-              Effect.DENY,
-              groupConditions,
-            ),
-          );
-        }
+      if (statementGroups.has(groupKey)) {
+        // This shouldn't happen with proper orchestrator logic, but defensive coding
+        const existing = statementGroups.get(groupKey)!;
+        data.allow.forEach((path) => existing.allow.add(path));
+        data.deny.forEach((path) => existing.deny.add(path));
+      } else {
+        statementGroups.set(groupKey, {
+          action,
+          allow: new Set(data.allow),
+          deny: new Set(data.deny),
+          groupConditions: data.groupConditions,
+        });
+      }
+    });
+
+    // DEBUG: Log the statement groups being created
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔧 StorageAccessPolicyFactory - Statement groups created:',
+      Array.from(statementGroups.entries()).map(([groupKey, data]) => ({
+        groupKey,
+        action: data.action,
+        allowPaths: Array.from(data.allow),
+        denyPaths: Array.from(data.deny),
+        groupConditions: data.groupConditions,
+      })),
+    );
+
+    // Create separate IAM policy statements for each group
+    const policyStatements = Array.from(statementGroups.values()).flatMap(
+      (data) => {
+        const { action, allow, deny, groupConditions } = data;
+
+        const allowStatements =
+          allow.size > 0
+            ? [this.getStatement(allow, action, Effect.ALLOW, groupConditions)]
+            : [];
+
+        const denyStatements =
+          deny.size > 0
+            ? [this.getStatement(deny, action, Effect.DENY, groupConditions)]
+            : [];
+
+        return [...allowStatements, ...denyStatements];
       },
     );
 
-    if (statements.length === 0) {
-      // this could happen if the Map contained entries but all of the path sets were empty
-      throw new AmplifyFault('EmptyPolicyFault', {
-        message: 'At least one permission must be specified',
-      });
-    }
+    // DEBUG: Log final policy statements being created
+    // eslint-disable-next-line no-console
+    console.log(
+      '🔧 StorageAccessPolicyFactory - Final policy statements:',
+      policyStatements.map((stmt) => ({
+        effect: stmt.effect,
+        actions: stmt.actions,
+        resources: stmt.resources,
+        conditions: stmt.conditions,
+      })),
+    );
 
     const policy = new Policy(
       this.stack,
       `${this.stack.node.path}Access${this.stack.node.children.length}`,
       {
-        statements,
+        statements: policyStatements,
       },
     );
 
