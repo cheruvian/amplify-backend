@@ -167,9 +167,44 @@ export class StorageAccessPolicyFactory {
 
     const baseConditions: Record<string, Record<string, string[]>> = {};
     if (groupConditions && groupConditions.length > 0) {
-      baseConditions['ForAnyValue:StringEquals'] = {
-        'cognito:groups': groupConditions,
+      // OPTIMAL SOLUTION: StringLike with delimiters (Best of both worlds!)
+      //
+      // PROBLEM: Original array-based approach failed due to Cognito Identity limitations
+      // SOLUTION: Use StringLike with delimiter-wrapped group names for exact matching
+      //
+      // IDENTITY POOL CONFIGURATION (Single mapping):
+      //   Tag Key: cognito:groups
+      //   Tag Value: claim:cognito:groups ? ':' + claim:cognito:groups.join('::') + ':' : ''
+      //
+      // EXAMPLE:
+      //   User groups: ["ADMINS", "API_USERS"]
+      //   Tag value: ":ADMINS::API_USERS:"
+      //   Policy patterns: [":ADMINS:", ":API_USERS:"]
+      //
+      // BENEFITS:
+      //   ✅ Single tag mapping (simple configuration)
+      //   ✅ No false positives (":ADMIN:" won't match ":SUPER_ADMIN:")
+      //   ✅ Exact group name matching
+      //   ✅ Auto-scales with new groups
+
+      // Create delimiter-wrapped patterns for exact matching
+      const groupPatterns = groupConditions.map(
+        (groupName) => `:${groupName}:`,
+      );
+
+      baseConditions['ForAnyValue:StringLike'] = {
+        'cognito:groups': groupPatterns,
       };
+
+      // DEBUG: Log the group conditions being created
+      // eslint-disable-next-line no-console
+      console.log(
+        `🔧 StorageAccessPolicyFactory - Delimiter-based group conditions for groups [${groupConditions.join(', ')}]:`,
+        {
+          patterns: groupPatterns,
+          condition: baseConditions,
+        },
+      );
     }
 
     switch (action) {

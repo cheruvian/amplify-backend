@@ -821,8 +821,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins', 'Moderators'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:', ':Moderators:'],
                 },
               },
             },
@@ -837,8 +837,8 @@ void describe('StorageAccessOrchestrator', () => {
                     `profile-pictures/${entityIdSubstitution}/`,
                   ],
                 },
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins', 'Moderators'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:', ':Moderators:'],
                 },
               },
             },
@@ -847,8 +847,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins', 'Moderators'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:', ':Moderators:'],
                 },
               },
             },
@@ -857,8 +857,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/${entityIdSubstitution}/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins', 'Moderators'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:', ':Moderators:'],
                 },
               },
             },
@@ -930,8 +930,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:'],
                 },
               },
             },
@@ -943,8 +943,8 @@ void describe('StorageAccessOrchestrator', () => {
                 StringLike: {
                   's3:prefix': ['profile-pictures/*', 'profile-pictures/'],
                 },
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:'],
                 },
               },
             },
@@ -953,8 +953,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:'],
                 },
               },
             },
@@ -963,8 +963,8 @@ void describe('StorageAccessOrchestrator', () => {
               Effect: 'Allow',
               Resource: `${bucket.bucketArn}/profile-pictures/*`,
               Condition: {
-                'ForAnyValue:StringEquals': {
-                  'cognito:groups': ['Admins'],
+                'ForAnyValue:StringLike': {
+                  'cognito:groups': [':Admins:'],
                 },
               },
             },
