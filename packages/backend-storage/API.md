@@ -60,6 +60,11 @@ export type StorageAccessDefinition = {
     }[];
 };
 
+// Warning: (ae-forgotten-export) The symbol "StorageAccessConfig" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export type StorageAccessDefinitionOutput = Record<string, StorageAccessConfig>;
+
 // @public (undocumented)
 export type StorageAccessGenerator = (allow: StorageAccessBuilder) => StorageAccessRecord;
 

@@ -139,6 +139,23 @@ export class AmplifyStorage
   }
 
   /**
+   * Access the storage access rules metadata.
+   * This allows users to programmatically access the access definitions for different paths.
+   * @example
+   * // Get authenticated user permissions for public path
+   * const permissions = storage.access['public/*']?.authenticated;
+   *
+   * // Get guest user permissions for protected path
+   * const guestPerms = storage.access['protected/*']?.guest;
+   *
+   * // Get all access rules for a specific path
+   * const allRules = storage.access['public/*'];
+   */
+  get access(): StorageAccessDefinitionOutput {
+    return this.accessDefinition || {};
+  }
+
+  /**
    * Attach a Lambda function trigger handler to the S3 events
    * @param events - list of S3 events that will trigger the handler
    * @param handler - The function that will handle the event

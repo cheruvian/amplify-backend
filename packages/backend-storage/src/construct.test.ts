@@ -3,6 +3,7 @@ import { AmplifyStorage } from './construct.js';
 import { App, Stack } from 'aws-cdk-lib';
 import { Capture, Template } from 'aws-cdk-lib/assertions';
 import assert from 'node:assert';
+import { StorageAccessDefinitionOutput } from './private_types.js';
 
 void describe('AmplifyStorage', () => {
   void it('creates a bucket', () => {
@@ -99,6 +100,50 @@ void describe('AmplifyStorage', () => {
       JSON.stringify(policyCapture.asObject()),
       /"aws:SecureTransport":"false"/,
     );
+  });
+
+  void describe('access property', () => {
+    void it('returns empty object when no access definition is set', () => {
+      const app = new App();
+      const stack = new Stack(app);
+      const storage = new AmplifyStorage(stack, 'test', { name: 'testName' });
+
+      assert.deepStrictEqual(storage.access, {});
+    });
+
+    void it('returns access definition when set', () => {
+      const app = new App();
+      const stack = new Stack(app);
+      const storage = new AmplifyStorage(stack, 'test', { name: 'testName' });
+
+      const accessDefinition: StorageAccessDefinitionOutput = {
+        'public/*': {
+          authenticated: ['get', 'list', 'write', 'delete'],
+          guest: ['get', 'list'],
+        },
+        'protected/*': {
+          authenticated: ['get', 'list'],
+        },
+      };
+
+      storage.addAccessDefinition(accessDefinition);
+
+      assert.deepStrictEqual(storage.access, accessDefinition);
+      assert.deepStrictEqual(storage.access['public/*']?.authenticated, [
+        'get',
+        'list',
+        'write',
+        'delete',
+      ]);
+      assert.deepStrictEqual(storage.access['public/*']?.guest, [
+        'get',
+        'list',
+      ]);
+      assert.deepStrictEqual(storage.access['protected/*']?.authenticated, [
+        'get',
+        'list',
+      ]);
+    });
   });
 
   void describe('storage overrides', () => {
